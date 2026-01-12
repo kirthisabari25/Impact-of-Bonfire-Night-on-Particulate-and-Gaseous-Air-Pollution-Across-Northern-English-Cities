@@ -174,35 +174,48 @@ ggplot(pm25_covid_city,
 
 
 #--------------------------------PCA of pollution+wind--------------------------------
-pca <- prcomp(agg %>% dplyr::select(mean_pm25,
-                                    mean_pm10, 
-                                    mean_no2, 
-                                    mean_wind),
-              scale = TRUE)
-#extracting the PC1 and PC2 into a plotting table
-agg.pca <- data.frame(
-  city = agg$city,
-  period = agg$period,
-  covid_period = agg$covid_period %>%
-    str_replace("Non‑COVID years", "Non-COVID years") %>%  
-    factor(levels = c("Non-COVID years", "COVID years")),
-  PC1 = pca$x[,1],
-  PC2 = pca$x[,2])
-# scatterplot of PC1 vs PC2
-ggplot(agg.pca, aes(PC1, PC2)) +
-  geom_point(aes(colour = covid_period), size = 2.5, alpha = 0.7) +
+data <- read_csv("intro_ds.csv") %>%
+  mutate(
+    date=dmy(date),
+    year= year(date),
+    no2=pmax(0,no2),
+    pm10=pmax(0,pm10),
+    pm25=pmax(0,pm25),
+    bonfire=as.numeric(date -as.Date(paste0(year,"-11-01"))),
+    period = case_when(
+      bonfire<4~"Baseline",
+      bonfire==4~"Bonfire",
+      bonfire>4~"Recovery"),
+    period=factor(period, levels = c("Baseline","Bonfire","Recovery")),
+    covid_period=if_else(
+      year %in% c(2020, 2021),"COVID years","Non-COVID years"),
+    covid_period=factor(covid_period,levels=c("Non-COVID years","COVID years")))
+agg<-data %>%group_by(city,year,period,covid_period) %>%
+  summarise(
+    mean_pm25=mean(pm25, na.rm = TRUE),
+    mean_pm10=mean(pm10, na.rm = TRUE),
+    mean_no2=mean(no2,  na.rm = TRUE),
+    mean_wind=mean(wind_factor, na.rm = TRUE),
+    .groups="drop")
+pca<- prcomp(
+  agg %>% select(mean_pm25, mean_pm10, mean_no2, mean_wind),
+  scale.=TRUE)
+agg.pca<-agg %>%
+  mutate(PC1=pca$x[,1],PC2=pca$x[,2])
+ggplot(agg.pca, aes(PC1,PC2)) +geom_point(aes(colour=covid_period), size=2.5,alpha=0.7) +
   facet_wrap(~ period) +
-  scale_colour_manual(
-    values = c("Non-COVID years" = "#FFC20A","COVID years" = "#DC3220")) +
+  scale_colour_manual(values=c("Non-COVID years" = "#FFC20A","COVID years"     = "#DC3220")) +
   labs(
-    title = "PCA of pollution + wind (city–year–period means)",
-    x = "PC1", y = "PC2", colour = "Year type",
-    caption = "Figure 7. PCA of pollution and wind variables (PC1 vs PC2), faceted by baseline, bonfire, and recovery periods.")+
-  theme_minimal()+
-  theme(plot.caption=element_text(hjust = 0.5))
-
+    title="PCA of pollution + wind (city–year–period means)",
+    x="PC1",
+    y="PC2",
+    colour="Year type",
+    caption="Figure 7. PCA of pollution and wind variables (PC1 vs PC2), faceted by baseline, bonfire, and recovery periods.")+
+  theme_minimal() +
+  theme(plot.caption=element_text(hjust=0.5))
 
 #--------------------------------------------------------------------------------
+
 
 
 
